@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Tldraw,
   Editor,
-  useEditor,
   TLUiOverrides,
   TldrawProps,
   TLComponents,
@@ -18,28 +17,23 @@ import {
   DefaultKeyboardShortcutsDialogContent,
   TLCameraOptions,
   TLShape,
-  Vec,
   Box,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import { useAtom, useSetAtom } from "jotai";
-import type { DialogueData } from "@/app/types/manga";
 import { DialogueBubbleShapeUtil } from "./DialogueBubbleShapeUtil";
 import { DialogueBubbleTool } from "./DialogueBubbleTool";
-import {
-  shapesToDialogues,
-  formatDialogueToScript,
-} from "@/app/utils/scriptParser";
 
 // Import tldraw assets
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
-import dialoguesAtom from "@/app/atoms/dialoguesAtom";
+import dialoguesAtom, { useDialoguesListener } from "@/app/atoms/dialoguesAtom";
 import scriptTextAtom from "@/app/atoms/scriptTextAtom";
 import syncSourceAtom from "@/app/atoms/syncSourceAtom";
+import { DialogueData } from "@/app/types/manga";
 
 // Define canvas constants
-const CANVAS_WIDTH = 1200;
-const CANVAS_HEIGHT = 1600; // You can adjust this based on your needs
+const CANVAS_WIDTH = 1024;
+const CANVAS_HEIGHT = 1024; // You can adjust this based on your needs
 const CANVAS_PADDING = 100; // Padding for camera constraints
 // Camera options with fixed bounds
 const MANGA_CAMERA_OPTIONS: TLCameraOptions = {
@@ -113,216 +107,6 @@ function constrainShapeToCanvas(shape: TLShape): TLShape {
   }
 
   return shape;
-}
-
-function TldrawContent({
-  dialogues,
-  backgroundUrl,
-}: {
-  dialogues: DialogueData[];
-  backgroundUrl?: string;
-}) {
-  const editor = useEditor();
-
-  const setDialogues = useSetAtom(dialoguesAtom);
-  const setScriptText = useSetAtom(scriptTextAtom);
-  const [syncSource, setSyncSource] = useAtom(syncSourceAtom);
-
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const shapeChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Set background image
-  const setBackground = useCallback(() => {
-    if (!editor || !backgroundUrl) return;
-
-    // Find and remove existing background image
-    const allShapes = editor.getCurrentPageShapes();
-    const existingBg = allShapes.find(
-      (shape) =>
-        shape.type === "image" && shape.id === "shape:background_image",
-    );
-
-    if (existingBg) {
-      editor.deleteShape(existingBg.id);
-    }
-
-    // Create background image shape
-    const imageWidth = CANVAS_WIDTH - 200; // Leave some padding
-    const imageHeight = (imageWidth * 3) / 4; // Assuming 4:3 aspect ratio
-
-    editor.createShape({
-      id: "shape:background_image" as any,
-      type: "image" as const,
-      x: 100, // Center with padding
-      y: 100,
-      props: {
-        url: backgroundUrl,
-        w: imageWidth,
-        h: imageHeight,
-      },
-    });
-
-    // Send the background image to the back
-    editor.sendToBack(["shape:background_image" as any]);
-  }, [editor, backgroundUrl]);
-  // Update background when backgroundUrl changes
-  // useEffect(() => {
-  //   if (backgroundUrl) {
-  //     setBackground();
-  //   }
-  // }, [setBackground, backgroundUrl]);
-
-  // Convert DialogueData to tldraw shapes with efficient updates
-  const updateDialogueShapes = useCallback(() => {
-    if (!editor) return;
-
-    const allShapes = editor.getCurrentPageShapes();
-    const existingDialogueShapes = allShapes.filter(
-      (shape) => shape.type === "dialogue-bubble",
-    );
-
-    // Create a map of existing shapes by their index
-    const existingShapeMap = new Map();
-    existingDialogueShapes.forEach((shape) => {
-      const match = shape.id.match(/dialogue_(\d+)$/);
-      if (match) {
-        existingShapeMap.set(parseInt(match[1]), shape);
-      }
-    });
-
-    // Update existing shapes and create new ones
-    dialogues.forEach((dialogue, index) => {
-      const shapeId = `shape:dialogue_${index}`;
-      const existingShape = existingShapeMap.get(index);
-
-      const shapeProps = {
-        w: 200,
-        text: dialogue.dialogue,
-        character: dialogue.character,
-        dialogueType: dialogue.type,
-      };
-
-      if (existingShape) {
-        // Update existing shape if properties changed
-        const needsUpdate =
-          existingShape.x !== dialogue.position.x ||
-          existingShape.y !== dialogue.position.y ||
-          existingShape.props.text !== dialogue.dialogue ||
-          existingShape.props.character !== dialogue.character ||
-          existingShape.props.dialogueType !== dialogue.type;
-
-        if (needsUpdate) {
-          editor.updateShape({
-            id: existingShape.id,
-            type: "dialogue-bubble",
-            x: dialogue.position.x,
-            y: dialogue.position.y,
-            props: shapeProps,
-          });
-        }
-        // Mark as processed
-        existingShapeMap.delete(index);
-      } else {
-        // Create new shape
-        editor.createShape({
-          id: shapeId as any,
-          type: "dialogue-bubble" as const,
-          x: dialogue.position.x,
-          y: dialogue.position.y,
-          props: shapeProps,
-        });
-      }
-    });
-
-    // Remove shapes that no longer have corresponding dialogues
-    const shapesToRemove = Array.from(existingShapeMap.values());
-    if (shapesToRemove.length > 0) {
-      editor.deleteShapes(shapesToRemove.map((shape) => shape.id));
-    }
-  }, [editor, dialogues]);
-  // Update shapes when dialogues change (debounced)
-  useEffect(() => {
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
-
-    updateTimeoutRef.current = setTimeout(() => {
-      updateDialogueShapes();
-    }, 300);
-
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-    };
-  }, [updateDialogueShapes]);
-
-  // Listen for shape changes to sync bubbles → text
-  // useEffect(() => {
-  //   if (!editor) return;
-  //
-  //   const handleShapeChanges = () => {
-  //     if (syncSource === "text") return;
-  //
-  //     if (shapeChangeTimeoutRef.current) {
-  //       clearTimeout(shapeChangeTimeoutRef.current);
-  //     }
-  //
-  //     shapeChangeTimeoutRef.current = setTimeout(() => {
-  //       const allShapes = editor.getCurrentPageShapes();
-  //       const dialogueShapes = allShapes.filter(
-  //         (shape) => shape.type === "dialogue-bubble",
-  //       );
-  //
-  //       const updatedDialogues = shapesToDialogues(dialogueShapes);
-  //
-  //       if (updatedDialogues.length > 0) {
-  //         setSyncSource("bubbles");
-  //         setDialogues(updatedDialogues);
-  //         const newScriptText = formatDialogueToScript(updatedDialogues);
-  //         setScriptText(newScriptText);
-  //
-  //         setTimeout(() => setSyncSource("none"), 100);
-  //       }
-  //     }, 300);
-  //   };
-  //
-  //   const unsubscribe = editor.store.listen(
-  //     (entry) => {
-  //       const isUserChange = entry.source === "user";
-  //
-  //       if (isUserChange) {
-  //         const hasDialogueChanges =
-  //           Object.values(entry.changes.added).some(
-  //             (record: any) =>
-  //               record.id && record.id.startsWith("shape:dialogue_"),
-  //           ) ||
-  //           Object.values(entry.changes.updated).some(
-  //             ([_prev, record]: any) =>
-  //               record.id && record.id.startsWith("shape:dialogue_"),
-  //           ) ||
-  //           Object.values(entry.changes.removed).some(
-  //             (record: any) =>
-  //               record.id && record.id.startsWith("shape:dialogue_"),
-  //           );
-  //
-  //         if (hasDialogueChanges) {
-  //           handleShapeChanges();
-  //         }
-  //       }
-  //     },
-  //     { source: "user", scope: "document" },
-  //   );
-  //
-  //   return () => {
-  //     unsubscribe();
-  //     if (shapeChangeTimeoutRef.current) {
-  //       clearTimeout(shapeChangeTimeoutRef.current);
-  //     }
-  //   };
-  // }, [editor, syncSource, setSyncSource, setDialogues, setScriptText]);
-
-  return null;
 }
 
 // Custom tools array
@@ -399,9 +183,20 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
 };
 
 export function TldrawMangaCanvas() {
-  const [dialogues] = useAtom(dialoguesAtom);
+  const [dialogues, setDialogues] = useAtom(dialoguesAtom);
+  const [editor, setEditor] = useState<Editor | null>(null);
+
+  useDialoguesListener((_get, _set, newVal, prevVal) => {
+    console.log("Dialogues changed from:", prevVal, "to:", newVal);
+
+    if (!editor) return;
+    updateDialogueShapes(newVal, editor);
+  });
 
   const handleMount = (editor: Editor) => {
+    if (!editor) {
+      setEditor(editor);
+    }
     // Set up camera options
     editor.setCameraOptions(MANGA_CAMERA_OPTIONS);
 
@@ -433,6 +228,8 @@ export function TldrawMangaCanvas() {
     editor.zoomToBounds(new Box(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT), {
       inset: 50,
     });
+
+    updateDialogueShapes(dialogues, editor);
   };
 
   // Custom shape utilities
@@ -443,16 +240,90 @@ export function TldrawMangaCanvas() {
     baseUrl: "/",
   });
 
-  const assetUrls: TldrawProps["assetUrls"] = {
-    ...defaultAssetUrls,
-    ...customAssetUrls,
-  };
+  const assetUrls: TldrawProps["assetUrls"] = useMemo(
+    () => ({
+      ...defaultAssetUrls,
+      ...customAssetUrls,
+    }),
+    [customAssetUrls],
+  );
+
+  // Convert DialogueData to tldraw shapes with efficient updates
+  const updateDialogueShapes = useCallback(
+    (dialogues: DialogueData[], editor: Editor) => {
+      console.log("updateDialogueShapes", dialogues, editor);
+      if (!editor) return;
+
+      const allShapes = editor.getCurrentPageShapes();
+      console.log("allShapes", allShapes);
+      const existingDialogueShapes = allShapes.filter(
+        (shape) => shape.type === "dialogue-bubble",
+      );
+
+      // Create a map of existing shapes by their index
+      const existingShapeMap = new Map();
+      existingDialogueShapes.forEach((shape) => {
+        const match = shape.id.match(/dialogue_(\d+)$/);
+        if (match) {
+          existingShapeMap.set(parseInt(match[1]), shape);
+        }
+      });
+
+      // Update existing shapes and create new ones
+      dialogues.forEach((dialogue, index) => {
+        const shapeId = `shape:dialogue_${index}`;
+        const existingShape = existingShapeMap.get(index);
+
+        const shapeProps = {
+          w: 200,
+          text: dialogue.dialogue,
+          character: dialogue.character,
+          dialogueType: dialogue.type,
+        };
+
+        if (existingShape) {
+          // Update existing shape if properties changed
+          const needsUpdate =
+            existingShape.x !== dialogue.position.x ||
+            existingShape.y !== dialogue.position.y ||
+            existingShape.props.text !== dialogue.dialogue ||
+            existingShape.props.character !== dialogue.character ||
+            existingShape.props.dialogueType !== dialogue.type;
+
+          if (needsUpdate) {
+            editor.updateShape({
+              id: existingShape.id,
+              type: "dialogue-bubble",
+              x: dialogue.position.x,
+              y: dialogue.position.y,
+              props: shapeProps,
+            });
+          }
+          // Mark as processed
+          existingShapeMap.delete(index);
+        } else {
+          // Create new shape
+          editor.createShape({
+            id: shapeId as any,
+            type: "dialogue-bubble" as const,
+            x: dialogue.position.x,
+            y: dialogue.position.y,
+            props: shapeProps,
+          });
+        }
+      });
+
+      // Remove shapes that no longer have corresponding dialogues
+      const shapesToRemove = Array.from(existingShapeMap.values());
+      if (shapesToRemove.length > 0) {
+        editor.deleteShapes(shapesToRemove.map((shape) => shape.id));
+      }
+    },
+    [dialogues, editor],
+  );
 
   return (
-    <div
-      className="tldraw__editor relative w-full h-full"
-      style={{ minHeight: "600px" }}
-    >
+    <div className="relative w-full h-full" style={{ minHeight: "600px" }}>
       <Tldraw
         onMount={handleMount}
         shapeUtils={customShapeUtils}
@@ -462,9 +333,7 @@ export function TldrawMangaCanvas() {
         assetUrls={assetUrls}
         cameraOptions={MANGA_CAMERA_OPTIONS}
         autoFocus={false}
-      >
-        <TldrawContent dialogues={dialogues} />
-      </Tldraw>
+      />
     </div>
   );
 }

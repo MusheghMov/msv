@@ -1,6 +1,9 @@
-import { atom } from "jotai";
 import { DialogueData } from "../types/manga";
+import { atomWithListeners } from "./atomWithListeners";
 
-const dialoguesAtom = atom<DialogueData[]>([]);
+const [dialoguesAtom, useDialoguesListener] = atomWithListeners<DialogueData[]>(
+  [],
+);
 
 export default dialoguesAtom;
+export { useDialoguesListener };
