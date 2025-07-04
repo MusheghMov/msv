@@ -1,18 +1,119 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
-import { Tldraw, Editor, useEditor } from "tldraw";
-import { useAtom, useSetAtom } from "jotai";
+import {
+  Tldraw,
+  Editor,
+  useEditor,
+  TLUiOverrides,
+  TldrawProps,
+  TLComponents,
+  TLUiAssetUrlOverrides,
+  DefaultToolbar,
+  DefaultToolbarContent,
+  TldrawUiMenuItem,
+  useIsToolSelected,
+  useTools,
+  DefaultKeyboardShortcutsDialog,
+  DefaultKeyboardShortcutsDialogContent,
+  TLCameraOptions,
+  TLShape,
+  Vec,
+  Box,
+} from "tldraw";
 import "tldraw/tldraw.css";
+import { useAtom, useSetAtom } from "jotai";
 import type { DialogueData } from "@/app/types/manga";
 import { DialogueBubbleShapeUtil } from "./DialogueBubbleShapeUtil";
-import { shapesToDialogues, formatDialogueToScript } from "@/app/utils/scriptParser";
+import { DialogueBubbleTool } from "./DialogueBubbleTool";
+import {
+  shapesToDialogues,
+  formatDialogueToScript,
+} from "@/app/utils/scriptParser";
 
 // Import tldraw assets
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import dialoguesAtom from "@/app/atoms/dialoguesAtom";
 import scriptTextAtom from "@/app/atoms/scriptTextAtom";
 import syncSourceAtom from "@/app/atoms/syncSourceAtom";
+
+// Define canvas constants
+const CANVAS_WIDTH = 1200;
+const CANVAS_HEIGHT = 1600; // You can adjust this based on your needs
+const CANVAS_PADDING = 100; // Padding for camera constraints
+// Camera options with fixed bounds
+const MANGA_CAMERA_OPTIONS: TLCameraOptions = {
+  isLocked: false,
+  wheelBehavior: "pan",
+  panSpeed: 1,
+  zoomSpeed: 1,
+  zoomSteps: [0.1, 0.25, 0.5, 1, 2, 4, 8],
+  constraints: {
+    bounds: {
+      x: 0,
+      y: 0,
+      w: CANVAS_WIDTH,
+      h: CANVAS_HEIGHT,
+    },
+    behavior: {
+      x: "contain", // Camera will be contained within bounds
+      y: "contain",
+    },
+    padding: {
+      x: CANVAS_PADDING,
+      y: CANVAS_PADDING,
+    },
+    origin: { x: 0.5, y: 0.5 },
+    initialZoom: "fit-max",
+    baseZoom: "default",
+  },
+};
+
+// Utility function to constrain shapes within canvas bounds
+function constrainShapeToCanvas(shape: TLShape): TLShape {
+  // Skip if shape is not at the page level
+  if (shape.parentId !== "page:page") return shape;
+
+  // Get shape bounds (approximate - you might need to adjust based on shape type)
+  const padding = 10; // Prevent shapes from touching the exact edge
+  const minX = padding;
+  const minY = padding;
+  const maxX = CANVAS_WIDTH - padding;
+  const maxY = CANVAS_HEIGHT - padding;
+
+  // Constrain position
+  let { x, y } = shape;
+
+  // For shapes with width/height props
+  if (
+    "props" in shape &&
+    shape.props &&
+    "w" in shape.props &&
+    "h" in shape.props
+  ) {
+    const w = (shape.props.w as number) || 200;
+    const h = (shape.props.h as number) || 100;
+
+    // Prevent shape from going outside right/bottom bounds
+    x = Math.min(x, maxX - w);
+    y = Math.min(y, maxY - h);
+  }
+
+  // Prevent shape from going outside left/top bounds
+  x = Math.max(x, minX);
+  y = Math.max(y, minY);
+
+  // Return shape with constrained position
+  if (x !== shape.x || y !== shape.y) {
+    return {
+      ...shape,
+      x,
+      y,
+    };
+  }
+
+  return shape;
+}
 
 function TldrawContent({
   dialogues,
@@ -22,11 +123,54 @@ function TldrawContent({
   backgroundUrl?: string;
 }) {
   const editor = useEditor();
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const setDialogues = useSetAtom(dialoguesAtom);
   const setScriptText = useSetAtom(scriptTextAtom);
   const [syncSource, setSyncSource] = useAtom(syncSourceAtom);
+
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shapeChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Set background image
+  const setBackground = useCallback(() => {
+    if (!editor || !backgroundUrl) return;
+
+    // Find and remove existing background image
+    const allShapes = editor.getCurrentPageShapes();
+    const existingBg = allShapes.find(
+      (shape) =>
+        shape.type === "image" && shape.id === "shape:background_image",
+    );
+
+    if (existingBg) {
+      editor.deleteShape(existingBg.id);
+    }
+
+    // Create background image shape
+    const imageWidth = CANVAS_WIDTH - 200; // Leave some padding
+    const imageHeight = (imageWidth * 3) / 4; // Assuming 4:3 aspect ratio
+
+    editor.createShape({
+      id: "shape:background_image" as any,
+      type: "image" as const,
+      x: 100, // Center with padding
+      y: 100,
+      props: {
+        url: backgroundUrl,
+        w: imageWidth,
+        h: imageHeight,
+      },
+    });
+
+    // Send the background image to the back
+    editor.sendToBack(["shape:background_image" as any]);
+  }, [editor, backgroundUrl]);
+  // Update background when backgroundUrl changes
+  // useEffect(() => {
+  //   if (backgroundUrl) {
+  //     setBackground();
+  //   }
+  // }, [setBackground, backgroundUrl]);
 
   // Convert DialogueData to tldraw shapes with efficient updates
   const updateDialogueShapes = useCallback(() => {
@@ -53,7 +197,6 @@ function TldrawContent({
 
       const shapeProps = {
         w: 200,
-        h: 100,
         text: dialogue.dialogue,
         character: dialogue.character,
         dialogueType: dialogue.type,
@@ -97,57 +240,16 @@ function TldrawContent({
       editor.deleteShapes(shapesToRemove.map((shape) => shape.id));
     }
   }, [editor, dialogues]);
-
-  // Set background image (simplified original approach)
-  const setBackground = useCallback(() => {
-    if (!editor || !backgroundUrl) return;
-
-    // Find and remove existing background image
-    const allShapes = editor.getCurrentPageShapes();
-    const existingBg = allShapes.find(
-      (shape) =>
-        shape.type === "image" && shape.id === "shape:background_image",
-    );
-
-    if (existingBg) {
-      editor.deleteShape(existingBg.id);
-    }
-
-    // Create background image shape positioned behind other elements
-    // Position it at the center of the current viewport
-    const viewportBounds = editor.getViewportPageBounds();
-    const centerX = viewportBounds.x + viewportBounds.w / 2;
-    const centerY = viewportBounds.y + viewportBounds.h / 2;
-
-    editor.createShape({
-      id: "shape:background_image" as any,
-      type: "image" as const,
-      x: centerX - 400, // Center the 800px wide image
-      y: centerY - 300, // Center the 600px tall image
-      props: {
-        url: backgroundUrl,
-        w: 800,
-        h: 600,
-      },
-    });
-
-    // Send the background image to the back so dialogue bubbles appear on top
-    editor.sendToBack(["shape:background_image" as any]);
-  }, [editor, backgroundUrl]);
-
   // Update shapes when dialogues change (debounced)
   useEffect(() => {
-    // Clear existing timeout
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current);
     }
 
-    // Set new timeout to debounce updates
     updateTimeoutRef.current = setTimeout(() => {
       updateDialogueShapes();
-    }, 300); // 300ms delay
+    }, 300);
 
-    // Cleanup on unmount
     return () => {
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
@@ -155,104 +257,210 @@ function TldrawContent({
     };
   }, [updateDialogueShapes]);
 
-  // Update background when backgroundUrl changes
-  useEffect(() => {
-    if (backgroundUrl) {
-      setBackground();
-    }
-  }, [setBackground, backgroundUrl]);
-
   // Listen for shape changes to sync bubbles → text
-  useEffect(() => {
-    if (!editor) return;
+  // useEffect(() => {
+  //   if (!editor) return;
+  //
+  //   const handleShapeChanges = () => {
+  //     if (syncSource === "text") return;
+  //
+  //     if (shapeChangeTimeoutRef.current) {
+  //       clearTimeout(shapeChangeTimeoutRef.current);
+  //     }
+  //
+  //     shapeChangeTimeoutRef.current = setTimeout(() => {
+  //       const allShapes = editor.getCurrentPageShapes();
+  //       const dialogueShapes = allShapes.filter(
+  //         (shape) => shape.type === "dialogue-bubble",
+  //       );
+  //
+  //       const updatedDialogues = shapesToDialogues(dialogueShapes);
+  //
+  //       if (updatedDialogues.length > 0) {
+  //         setSyncSource("bubbles");
+  //         setDialogues(updatedDialogues);
+  //         const newScriptText = formatDialogueToScript(updatedDialogues);
+  //         setScriptText(newScriptText);
+  //
+  //         setTimeout(() => setSyncSource("none"), 100);
+  //       }
+  //     }, 300);
+  //   };
+  //
+  //   const unsubscribe = editor.store.listen(
+  //     (entry) => {
+  //       const isUserChange = entry.source === "user";
+  //
+  //       if (isUserChange) {
+  //         const hasDialogueChanges =
+  //           Object.values(entry.changes.added).some(
+  //             (record: any) =>
+  //               record.id && record.id.startsWith("shape:dialogue_"),
+  //           ) ||
+  //           Object.values(entry.changes.updated).some(
+  //             ([_prev, record]: any) =>
+  //               record.id && record.id.startsWith("shape:dialogue_"),
+  //           ) ||
+  //           Object.values(entry.changes.removed).some(
+  //             (record: any) =>
+  //               record.id && record.id.startsWith("shape:dialogue_"),
+  //           );
+  //
+  //         if (hasDialogueChanges) {
+  //           handleShapeChanges();
+  //         }
+  //       }
+  //     },
+  //     { source: "user", scope: "document" },
+  //   );
+  //
+  //   return () => {
+  //     unsubscribe();
+  //     if (shapeChangeTimeoutRef.current) {
+  //       clearTimeout(shapeChangeTimeoutRef.current);
+  //     }
+  //   };
+  // }, [editor, syncSource, setSyncSource, setDialogues, setScriptText]);
 
-    const handleShapeChanges = () => {
-      // Only process changes if sync source is not already 'text' (to prevent loops)
-      if (syncSource === 'text') return;
-
-      // Clear existing timeout
-      if (shapeChangeTimeoutRef.current) {
-        clearTimeout(shapeChangeTimeoutRef.current);
-      }
-
-      // Debounce the update
-      shapeChangeTimeoutRef.current = setTimeout(() => {
-        const allShapes = editor.getCurrentPageShapes();
-        const dialogueShapes = allShapes.filter(shape => shape.type === 'dialogue-bubble');
-        
-        // Convert shapes back to DialogueData
-        const updatedDialogues = shapesToDialogues(dialogueShapes);
-        
-        if (updatedDialogues.length > 0) {
-          // Set sync source to 'bubbles' to prevent text→bubble sync
-          setSyncSource('bubbles');
-          
-          // Update dialogues and script text
-          setDialogues(updatedDialogues);
-          const newScriptText = formatDialogueToScript(updatedDialogues);
-          setScriptText(newScriptText);
-          
-          // Reset sync source after a delay
-          setTimeout(() => setSyncSource('none'), 100);
-        }
-      }, 300);
-    };
-
-    // Listen to store changes
-    const unsubscribe = editor.store.listen(
-      (entry) => {
-        // Check if any dialogue bubble shapes were modified
-        const isUserChange = entry.source === 'user';
-        
-        if (isUserChange) {
-          // Check if any changes involve dialogue shapes
-          const hasDialogueChanges = Object.values(entry.changes.added).some((record: any) => 
-            record.id && record.id.startsWith('shape:dialogue_')
-          ) || Object.values(entry.changes.updated).some(([_prev, record]: any) => 
-            record.id && record.id.startsWith('shape:dialogue_')
-          ) || Object.values(entry.changes.removed).some((record: any) =>
-            record.id && record.id.startsWith('shape:dialogue_')
-          );
-          
-          if (hasDialogueChanges) {
-            handleShapeChanges();
-          }
-        }
-      },
-      { source: 'user', scope: 'document' }
-    );
-
-    return () => {
-      unsubscribe();
-      if (shapeChangeTimeoutRef.current) {
-        clearTimeout(shapeChangeTimeoutRef.current);
-      }
-    };
-  }, [editor, syncSource, setSyncSource, setDialogues, setScriptText]);
-
-  return null; // This component doesn't render anything itself
+  return null;
 }
+
+// Custom tools array
+const customTools = [DialogueBubbleTool];
+
+// UI overrides
+const uiOverrides: TLUiOverrides = {
+  tools(editor, tools) {
+    tools["dialogue-bubble-tool"] = {
+      id: "dialogue-bubble-tool",
+      icon: "dialogue-bubble-icon",
+      label: "Dialogue Bubble",
+      kbd: "d",
+      onSelect: () => {
+        editor.setCurrentTool("dialogue-bubble-tool");
+      },
+    };
+    return tools;
+  },
+};
+
+// Custom Components
+const components: TLComponents = {
+  Toolbar: (props) => {
+    const tools = useTools();
+    const isDialogueBubbleSelected = useIsToolSelected(
+      tools["dialogue-bubble-tool"],
+    );
+    return (
+      <DefaultToolbar {...props}>
+        <TldrawUiMenuItem
+          {...tools["dialogue-bubble-tool"]}
+          isSelected={isDialogueBubbleSelected}
+        />
+        <DefaultToolbarContent />
+      </DefaultToolbar>
+    );
+  },
+  KeyboardShortcutsDialog: (props) => {
+    const tools = useTools();
+    return (
+      <DefaultKeyboardShortcutsDialog {...props}>
+        <DefaultKeyboardShortcutsDialogContent />
+        <TldrawUiMenuItem {...tools["dialogue-bubble-tool"]} />
+      </DefaultKeyboardShortcutsDialog>
+    );
+  },
+  // Visual canvas boundary indicator
+  OnTheCanvas: () => {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+          border: "2px solid #e0e0e0",
+          borderRadius: "8px",
+          pointerEvents: "none",
+          backgroundColor: "white",
+        }}
+      />
+    );
+  },
+};
+
+// Custom Asset URLs
+const customAssetUrls: TLUiAssetUrlOverrides = {
+  icons: {
+    "dialogue-bubble-icon":
+      "https://unpkg.com/lucide-static@latest/icons/message-square-quote.svg",
+  },
+};
 
 export function TldrawMangaCanvas() {
   const [dialogues] = useAtom(dialoguesAtom);
+
   const handleMount = (editor: Editor) => {
-    // Initial setup when tldraw mounts
+    // Set up camera options
+    editor.setCameraOptions(MANGA_CAMERA_OPTIONS);
+
+    // Register shape constraints to keep shapes within canvas bounds
+    editor.sideEffects.registerBeforeCreateHandler("shape", (shape) => {
+      return constrainShapeToCanvas(shape);
+    });
+
+    editor.sideEffects.registerBeforeChangeHandler(
+      "shape",
+      (_prevShape, nextShape) => {
+        return constrainShapeToCanvas(nextShape);
+      },
+    );
+
+    // Set initial camera position to show the canvas
+    editor.setCamera(
+      {
+        x: 0,
+        y: 0,
+        z: 1,
+      },
+      {
+        immediate: true,
+      },
+    );
+
+    // Zoom to fit the canvas
+    editor.zoomToBounds(new Box(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT), {
+      inset: 50,
+    });
   };
 
   // Custom shape utilities
   const customShapeUtils = [DialogueBubbleShapeUtil];
 
-  // Get asset URLs for proper icon loading (use local assets)
-  const assetUrls = getAssetUrls({
+  // Merge default asset URLs with custom ones
+  const defaultAssetUrls = getAssetUrls({
     baseUrl: "/",
   });
 
+  const assetUrls: TldrawProps["assetUrls"] = {
+    ...defaultAssetUrls,
+    ...customAssetUrls,
+  };
+
   return (
-    <div className="relative w-full h-full" style={{ minHeight: "600px" }}>
+    <div
+      className="tldraw__editor relative w-full h-full"
+      style={{ minHeight: "600px" }}
+    >
       <Tldraw
         onMount={handleMount}
         shapeUtils={customShapeUtils}
+        tools={customTools}
+        overrides={uiOverrides}
+        components={components}
         assetUrls={assetUrls}
+        cameraOptions={MANGA_CAMERA_OPTIONS}
         autoFocus={false}
       >
         <TldrawContent dialogues={dialogues} />

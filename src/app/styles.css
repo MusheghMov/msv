@@ -129,12 +129,18 @@
 }
 
 @layer components {
+  .tldraw__editor-with-inset-canvas .tl-canvas {
+    position: absolute;
+    inset: 25%;
+    width: 50%;
+    height: 50%;
+  }
   /* Manga-specific font class */
   .manga-font {
     font-family: "MangaTemple", "Comic Sans MS", "Comic Sans", cursive;
     font-weight: bold;
   }
-  
+
   /* Canvas container styles */
   .manga-canvas-container {
     background-image: url("https://placehold.co/800x1200/FFF/E2E8F0?text=Your+Manga+Page+Here");
@@ -142,18 +148,18 @@
     background-position: center;
     position: relative;
   }
-  
+
   /* Canvas cursor states */
   .manga-canvas {
     cursor: grab;
     position: relative;
     z-index: 10;
   }
-  
+
   .manga-canvas:active {
     cursor: grabbing;
   }
-  
+
   /* Loading overlay styles */
   .manga-loader {
     position: absolute;
