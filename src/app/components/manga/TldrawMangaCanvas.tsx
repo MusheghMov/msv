@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncDemo } from "@tldraw/sync";
 import { useCallback, useMemo, useState } from "react";
 import {
   Tldraw,
@@ -32,8 +33,8 @@ import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
 import { Card } from "../ui/card";
 
 // Define canvas constants
-const CANVAS_WIDTH = 1024;
-const CANVAS_HEIGHT = 1024; // You can adjust this based on your needs
+const CANVAS_WIDTH = 2048; // You can adjust this based on your needs
+const CANVAS_HEIGHT = 2048; // You can adjust this based on your needs
 const CANVAS_PADDING = 100; // Padding for camera constraints
 // Camera options with fixed bounds
 const MANGA_CAMERA_OPTIONS: TLCameraOptions = {
@@ -333,8 +334,8 @@ export function TldrawMangaCanvas() {
     updateDialogueShapes(dialogues, editor);
   };
 
-  // Custom shape utilities
-  const customShapeUtils = [DialogueBubbleShapeUtil];
+  // Custom shape utilities - memoized to prevent re-renders
+  const customShapeUtils = useMemo(() => [DialogueBubbleShapeUtil], []);
 
   // Merge default asset URLs with custom ones
   const defaultAssetUrls = getAssetUrls({
@@ -455,6 +456,10 @@ export function TldrawMangaCanvas() {
     },
     [dialogues, editor],
   );
+  const store = useSyncDemo({
+    roomId: "msv-deom-room-1212341241212415123541234",
+    shapeUtils: customShapeUtils,
+  });
 
   return (
     <Card
@@ -462,6 +467,7 @@ export function TldrawMangaCanvas() {
       style={{ minHeight: "600px" }}
     >
       <Tldraw
+        store={store}
         onMount={handleMount}
         shapeUtils={customShapeUtils}
         tools={customTools}
