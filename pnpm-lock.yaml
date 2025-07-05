@@ -140,6 +140,9 @@ importers:
       react-day-picker:
         specifier: ^9.7.0
         version: 9.7.0(react@19.2.0-canary-39cad7af-20250411)
+      react-dom:
+        specifier: 19.2.0-canary-39cad7af-20250411
+        version: 19.2.0-canary-39cad7af-20250411(react@19.2.0-canary-39cad7af-20250411)
       react-hook-form:
         specifier: ^7.59.0
         version: 7.59.0(react@19.2.0-canary-39cad7af-20250411)

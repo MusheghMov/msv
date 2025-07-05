@@ -7,6 +7,7 @@ export default defineConfig({
   environments: {
     ssr: {},
   },
+
   plugins: [
     cloudflare({
       viteEnvironment: { name: "worker" },
