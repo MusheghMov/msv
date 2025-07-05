@@ -20,16 +20,15 @@ import {
   Box,
 } from "tldraw";
 import "tldraw/tldraw.css";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { DialogueBubbleShapeUtil } from "./DialogueBubbleShapeUtil";
 import { DialogueBubbleTool } from "./DialogueBubbleTool";
 
 // Import tldraw assets
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import dialoguesAtom, { useDialoguesListener } from "@/app/atoms/dialoguesAtom";
-import scriptTextAtom from "@/app/atoms/scriptTextAtom";
-import syncSourceAtom from "@/app/atoms/syncSourceAtom";
 import { DialogueData } from "@/app/types/manga";
+import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
 
 // Define canvas constants
 const CANVAS_WIDTH = 1024;
@@ -62,6 +61,16 @@ const MANGA_CAMERA_OPTIONS: TLCameraOptions = {
     baseZoom: "default",
   },
 };
+
+export function constrainToArtboard(
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  return {
+    x: Math.max(0, Math.min(CANVAS_WIDTH, x)),
+    y: Math.max(0, Math.min(CANVAS_HEIGHT, y)),
+  };
+}
 
 // Utility function to constrain shapes within canvas bounds
 function constrainShapeToCanvas(shape: TLShape): TLShape {
@@ -184,19 +193,75 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
 
 export function TldrawMangaCanvas() {
   const [dialogues, setDialogues] = useAtom(dialoguesAtom);
-  const [editor, setEditor] = useState<Editor | null>(null);
-
   useDialoguesListener((_get, _set, newVal, prevVal) => {
-    console.log("Dialogues changed from:", prevVal, "to:", newVal);
-
     if (!editor) return;
     updateDialogueShapes(newVal, editor);
   });
 
+  const [editor, setEditor] = useState<Editor | null>(null);
+
+  // Handle shape changes and sync back to dialogue data
+  const handleShapeChange = useCallback(
+    (dialogueUUID: string, shape: TLShape) => {
+      try {
+        // Validate UUID format
+        if (!dialogueUUID || typeof dialogueUUID !== "string") {
+          console.warn("Invalid dialogue UUID:", dialogueUUID);
+          return;
+        }
+
+        // Ensure this is a dialogue bubble shape
+        if (shape.type !== "dialogue-bubble") {
+          console.warn("Shape is not a dialogue bubble:", shape.type);
+          return;
+        }
+
+        // Cast to DialogueBubbleShape for type safety
+        const dialogueShape = shape as DialogueBubbleShape;
+
+        // Find the dialogue with this UUID and update it
+        const dialogueIndex = dialogues.findIndex(
+          (dialogue) => dialogue.id === dialogueUUID,
+        );
+
+        if (dialogueIndex === -1) {
+          console.warn("No dialogue found for UUID:", dialogueUUID);
+          // Handle orphaned shape - could remove it or ignore
+          return;
+        }
+
+        const updatedDialogues = dialogues.map((dialogue) => {
+          if (dialogue.id === dialogueUUID) {
+            return {
+              ...dialogue,
+              position: {
+                x: Math.max(0, Math.min(1024, Math.round(dialogueShape.x))),
+                y: Math.max(0, Math.min(1024, Math.round(dialogueShape.y))),
+              },
+              // Update text content if it changed, with fallbacks
+              dialogue: dialogueShape.props?.text || dialogue.dialogue || "",
+              character:
+                dialogueShape.props?.character ||
+                dialogue.character ||
+                "Unknown",
+              type:
+                dialogueShape.props?.dialogueType || dialogue.type || "speech",
+            };
+          }
+          return dialogue;
+        });
+
+        setDialogues(updatedDialogues);
+      } catch (error) {
+        console.error("Error handling shape change:", error);
+      }
+    },
+    [dialogues, setDialogues],
+  );
+
   const handleMount = (editor: Editor) => {
-    if (!editor) {
-      setEditor(editor);
-    }
+    setEditor(editor);
+
     // Set up camera options
     editor.setCameraOptions(MANGA_CAMERA_OPTIONS);
 
@@ -209,6 +274,41 @@ export function TldrawMangaCanvas() {
       "shape",
       (_prevShape, nextShape) => {
         return constrainShapeToCanvas(nextShape);
+      },
+    );
+
+    // Register handler for shape changes to sync back to dialogues
+    editor.sideEffects.registerAfterChangeHandler(
+      "shape",
+      (prevShape, nextShape) => {
+        // Only handle dialogue-bubble shapes
+        if (nextShape.type !== "dialogue-bubble") return;
+
+        // Extract dialogue UUID from shape ID
+        const match = nextShape.id.match(/^shape:(.+)$/);
+        if (!match) return;
+
+        const dialogueUUID = match[1];
+
+        // Cast shapes to DialogueBubbleShape for type safety
+        const prevBubbleShape = prevShape as DialogueBubbleShape;
+        const nextBubbleShape = nextShape as DialogueBubbleShape;
+
+        // Check if position or content changed
+        const positionChanged =
+          prevBubbleShape.x !== nextBubbleShape.x ||
+          prevBubbleShape.y !== nextBubbleShape.y;
+        const contentChanged =
+          prevBubbleShape.props?.text !== nextBubbleShape.props?.text ||
+          prevBubbleShape.props?.character !==
+            nextBubbleShape.props?.character ||
+          prevBubbleShape.props?.dialogueType !==
+            nextBubbleShape.props?.dialogueType;
+
+        if (positionChanged || contentChanged) {
+          // Update dialogue data based on shape changes
+          handleShapeChange(dialogueUUID, nextBubbleShape);
+        }
       },
     );
 
@@ -248,75 +348,108 @@ export function TldrawMangaCanvas() {
     [customAssetUrls],
   );
 
-  // Convert DialogueData to tldraw shapes with efficient updates
+  // Convert DialogueData to tldraw shapes with UUID-based efficient updates
   const updateDialogueShapes = useCallback(
     (dialogues: DialogueData[], editor: Editor) => {
-      console.log("updateDialogueShapes", dialogues, editor);
       if (!editor) return;
 
-      const allShapes = editor.getCurrentPageShapes();
-      console.log("allShapes", allShapes);
-      const existingDialogueShapes = allShapes.filter(
-        (shape) => shape.type === "dialogue-bubble",
-      );
+      try {
+        const allShapes = editor.getCurrentPageShapes();
+        const existingDialogueShapes = allShapes.filter(
+          (shape) => shape.type === "dialogue-bubble",
+        );
 
-      // Create a map of existing shapes by their index
-      const existingShapeMap = new Map();
-      existingDialogueShapes.forEach((shape) => {
-        const match = shape.id.match(/dialogue_(\d+)$/);
-        if (match) {
-          existingShapeMap.set(parseInt(match[1]), shape);
-        }
-      });
-
-      // Update existing shapes and create new ones
-      dialogues.forEach((dialogue, index) => {
-        const shapeId = `shape:dialogue_${index}`;
-        const existingShape = existingShapeMap.get(index);
-
-        const shapeProps = {
-          w: 200,
-          text: dialogue.dialogue,
-          character: dialogue.character,
-          dialogueType: dialogue.type,
-        };
-
-        if (existingShape) {
-          // Update existing shape if properties changed
-          const needsUpdate =
-            existingShape.x !== dialogue.position.x ||
-            existingShape.y !== dialogue.position.y ||
-            existingShape.props.text !== dialogue.dialogue ||
-            existingShape.props.character !== dialogue.character ||
-            existingShape.props.dialogueType !== dialogue.type;
-
-          if (needsUpdate) {
-            editor.updateShape({
-              id: existingShape.id,
-              type: "dialogue-bubble",
-              x: dialogue.position.x,
-              y: dialogue.position.y,
-              props: shapeProps,
-            });
+        // Create a map of existing shapes by their UUID (extracted from shape ID)
+        const existingShapeMap = new Map();
+        existingDialogueShapes.forEach((shape) => {
+          // Extract UUID from shape ID format: "shape:uuid"
+          const match = shape.id.match(/^shape:(.+)$/);
+          if (match) {
+            const uuid = match[1];
+            existingShapeMap.set(uuid, shape);
+          } else {
+            console.warn("Shape with invalid ID format:", shape.id);
           }
-          // Mark as processed
-          existingShapeMap.delete(index);
-        } else {
-          // Create new shape
-          editor.createShape({
-            id: shapeId as any,
-            type: "dialogue-bubble" as const,
-            x: dialogue.position.x,
-            y: dialogue.position.y,
-            props: shapeProps,
-          });
-        }
-      });
+        });
 
-      // Remove shapes that no longer have corresponding dialogues
-      const shapesToRemove = Array.from(existingShapeMap.values());
-      if (shapesToRemove.length > 0) {
-        editor.deleteShapes(shapesToRemove.map((shape) => shape.id));
+        // Update existing shapes and create new ones based on UUIDs
+        dialogues.forEach((dialogue) => {
+          // Validate dialogue has required fields
+          if (!dialogue.id) {
+            console.warn("Dialogue missing UUID:", dialogue);
+            return;
+          }
+
+          const shapeId = `shape:${dialogue.id}`;
+          const existingShape = existingShapeMap.get(dialogue.id);
+
+          const shapeProps = {
+            w: 200,
+            text: dialogue.dialogue || "",
+            character: dialogue.character || "Unknown",
+            dialogueType: dialogue.type || "speech",
+          };
+
+          // Ensure position is valid
+          const safePosition = {
+            x: Math.max(0, Math.min(1024, dialogue.position?.x || 100)),
+            y: Math.max(0, Math.min(1024, dialogue.position?.y || 100)),
+          };
+
+          if (existingShape) {
+            // Cast to DialogueBubbleShape for type safety
+            const bubbleShape = existingShape as DialogueBubbleShape;
+
+            // Update existing shape if properties changed
+            const needsUpdate =
+              bubbleShape.x !== safePosition.x ||
+              bubbleShape.y !== safePosition.y ||
+              bubbleShape.props.text !== shapeProps.text ||
+              bubbleShape.props.character !== shapeProps.character ||
+              bubbleShape.props.dialogueType !== shapeProps.dialogueType;
+
+            if (needsUpdate) {
+              try {
+                editor.updateShape({
+                  id: existingShape.id,
+                  type: "dialogue-bubble",
+                  x: safePosition.x,
+                  y: safePosition.y,
+                  props: shapeProps,
+                });
+              } catch (error) {
+                console.error("Error updating shape:", error, dialogue.id);
+              }
+            }
+            // Mark as processed
+            existingShapeMap.delete(dialogue.id);
+          } else {
+            // Create new shape with UUID-based ID
+            try {
+              editor.createShape({
+                id: shapeId as any,
+                type: "dialogue-bubble" as const,
+                x: safePosition.x,
+                y: safePosition.y,
+                props: shapeProps,
+              });
+            } catch (error) {
+              console.error("Error creating shape:", error, dialogue.id);
+            }
+          }
+        });
+
+        // Remove shapes that no longer have corresponding dialogues
+        const shapesToRemove = Array.from(existingShapeMap.values());
+        if (shapesToRemove.length > 0) {
+          try {
+            editor.deleteShapes(shapesToRemove.map((shape) => shape.id));
+          } catch (error) {
+            console.error("Error removing orphaned shapes:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Error in updateDialogueShapes:", error);
       }
     },
     [dialogues, editor],

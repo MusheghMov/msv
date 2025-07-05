@@ -16,6 +16,7 @@ export function flattenV2ToDialogueData(parsedScript: ParsedMangaScript): Dialog
     for (const scene of chapter.scenes) {
       for (const dialogue of scene.dialogues) {
         dialogues.push({
+          id: dialogue.id, // Preserve UUID for bidirectional sync
           character: dialogue.character,
           type: dialogue.type,
           position: dialogue.position || { x: 100, y: 100 }, // Default position if none provided
@@ -92,7 +93,7 @@ export function reconstructV2FromDialogueData(
   let lineNumber = 3;
   for (const dialogue of dialogues) {
     const v2Dialogue: V2Dialogue = {
-      id: crypto.randomUUID(),
+      id: dialogue.id || crypto.randomUUID(), // Preserve existing UUID or generate new one
       character: dialogue.character,
       type: dialogue.type,
       text: dialogue.dialogue,
@@ -142,6 +143,7 @@ function updateV2ScriptWithDialogues(
         
         updatedDialogues.push({
           ...originalDialogue,
+          id: newDialogue.id || originalDialogue.id, // Preserve new UUID or keep original
           character: newDialogue.character,
           type: newDialogue.type,
           text: newDialogue.dialogue,
@@ -171,7 +173,7 @@ function updateV2ScriptWithDialogues(
     for (let i = dialogueIndex; i < newDialogues.length; i++) {
       const dialogue = newDialogues[i];
       lastScene.dialogues.push({
-        id: crypto.randomUUID(),
+        id: dialogue.id || crypto.randomUUID(), // Preserve existing UUID or generate new one
         character: dialogue.character,
         type: dialogue.type,
         text: dialogue.dialogue,
@@ -236,4 +238,70 @@ export function getV2ScriptStats(parsedScript: ParsedMangaScript) {
     errorCount: parsedScript.errors.filter(e => e.severity === 'error').length,
     warningCount: parsedScript.errors.filter(e => e.severity === 'warning').length
   };
+}
+
+/**
+ * Creates a UUID->DialogueData Map for efficient lookups
+ */
+export function createDialogueUUIDMap(dialogues: DialogueData[]): Map<string, DialogueData> {
+  const map = new Map<string, DialogueData>();
+  for (const dialogue of dialogues) {
+    map.set(dialogue.id, dialogue);
+  }
+  return map;
+}
+
+/**
+ * Creates a UUID->V2Dialogue Map from parsed script for efficient lookups
+ */
+export function createV2DialogueUUIDMap(parsedScript: ParsedMangaScript): Map<string, V2Dialogue> {
+  const map = new Map<string, V2Dialogue>();
+  for (const chapter of parsedScript.chapters) {
+    for (const scene of chapter.scenes) {
+      for (const dialogue of scene.dialogues) {
+        map.set(dialogue.id, dialogue);
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Finds a dialogue by UUID in the parsed script
+ */
+export function findDialogueByUUID(parsedScript: ParsedMangaScript, uuid: string): V2Dialogue | null {
+  for (const chapter of parsedScript.chapters) {
+    for (const scene of chapter.scenes) {
+      for (const dialogue of scene.dialogues) {
+        if (dialogue.id === uuid) {
+          return dialogue;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Updates a specific dialogue by UUID in the parsed script
+ */
+export function updateDialogueByUUID(
+  parsedScript: ParsedMangaScript, 
+  uuid: string, 
+  updates: Partial<Pick<V2Dialogue, 'character' | 'type' | 'text' | 'position'>>
+): boolean {
+  for (const chapter of parsedScript.chapters) {
+    for (const scene of chapter.scenes) {
+      for (let i = 0; i < scene.dialogues.length; i++) {
+        if (scene.dialogues[i].id === uuid) {
+          scene.dialogues[i] = {
+            ...scene.dialogues[i],
+            ...updates
+          };
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }

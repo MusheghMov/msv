@@ -1,6 +1,9 @@
-// Types and interfaces for the Manga Script Visualizer
-
-export type DialogueType = 'speech' | 'thought' | 'shout' | 'whisper' | 'narrator';
+export type DialogueType =
+  | "speech"
+  | "thought"
+  | "shout"
+  | "whisper"
+  | "narrator";
 
 export interface Position {
   x: number;
@@ -8,6 +11,7 @@ export interface Position {
 }
 
 export interface DialogueData {
+  id: string;
   character: string;
   type: DialogueType;
   position: Position;
@@ -30,16 +34,13 @@ export interface BubbleDimensions {
   y: number;
 }
 
-// Re-export V2 types for compatibility
 export type {
-  DialogueType as V2DialogueType,
-  Position as V2Position,
-  Dialogue as V2Dialogue,
-  Scene as V2Scene,
-  Chapter as V2Chapter,
-  ParseError as V2ParseError,
-  ParsedMangaScript as V2ParsedMangaScript,
-} from '@/app/utils/mangaScriptV2Parser';
+  Dialogue,
+  Scene,
+  Chapter,
+  ParseError,
+  ParsedMangaScript,
+} from "@/app/utils/mangaScriptV2Parser";
 
 export interface AIGenerationRequest {
   userPrompt: string;
@@ -59,15 +60,15 @@ export interface ScriptParseResult {
   isValid: boolean;
 }
 
-// Constants for canvas operations
 export const CANVAS_DEFAULTS = {
   BUBBLE_PADDING: 30,
   MAX_TEXT_WIDTH: 250,
   LINE_HEIGHT: 22,
   FONT: '16px "Comic Sans MS", "Comic Sans", cursive',
   CHARACTER_FONT: 'bold 18px "Inter", sans-serif',
-  FILL_COLOR: 'black',
-  STROKE_COLOR: 'black',
+  FILL_COLOR: "black",
+  STROKE_COLOR: "black",
   LINE_WIDTH: 3,
-  BUBBLE_FILL: 'white'
+  BUBBLE_FILL: "white",
 } as const;
+

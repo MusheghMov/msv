@@ -1,6 +1,5 @@
 import { StateNode, TLKeyboardEventInfo, TLPointerEventInfo } from "tldraw";
-import type { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
-import { constrainToArtboard } from "@/app/utils/mangaCanvas";
+import { constrainToArtboard } from "./TldrawMangaCanvas";
 
 export class DialogueBubbleTool extends StateNode {
   static override id = "dialogue-bubble-tool" as const;
@@ -26,8 +25,8 @@ export class DialogueBubbleTool extends StateNode {
     const bubbleWidth = 200;
     const bubbleHeight = 100;
     const constrainedPos = constrainToArtboard(
-      x - bubbleWidth / 2, // Center the bubble on cursor
-      y - bubbleHeight / 2
+      x - bubbleWidth / 2,
+      y - bubbleHeight / 2,
     );
 
     // Find the next available dialogue index
@@ -82,4 +81,3 @@ export class DialogueBubbleTool extends StateNode {
     }
   }
 }
-
