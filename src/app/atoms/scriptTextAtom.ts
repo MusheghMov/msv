@@ -1,26 +1,20 @@
 import { atom } from "jotai";
 
-const DEFAULT_V2_SCRIPT = `# Chapter 1: The Storm Approaches
+const DEFAULT_V2_SCRIPT = `# Chapter 1: THE DAY WHEN EVERYTHING WENT WRONG
 
-* Opening Scene: Dark clouds gather over the city as our heroes prepare for battle
+* Opening Scene: Midday. A small, peaceful town surrounded by mountains. Suddenly, a spaceship spirals out of control, crashing toward a nearby field.
 
-Kenji: speech: {200,300} The storm is coming faster than we expected.
-Yumi: thought: {500,200} I can sense something dark in those clouds.
-Ryo: speech: {700,450} We need to evacuate the civilians immediately!
 
-* The Evacuation: Chaos fills the streets as people flee from the approaching storm
+Narrator: narrator: {180,180} It was the beginning of the end...
+Narrator: narrator: {260,320} When we faced the cruel reality...
+Pilot #1: shout: {610,310} SOS! We’ve lost control — engines offline!
+Pilot #1: thought: {330,720} I don't want to die here alone...  
+Pilot #1: shout: {190,930} Please... Please... Help me... 
 
-Kenji: shout: {100,150} Everyone move to the shelters!
-Civilian: speech: {400,300} What about the children at the school?
-Yumi: speech: {600,400} I'll handle the school. You two focus on the residential area.
 
-* The Storm Hits: Lightning tears through the sky as the supernatural storm begins
-
-Narrator: narrator: {400,50} As the first lightning bolt struck, the city knew this was no ordinary storm.
-Kenji: shout: {200,500} Take cover!
-Yumi: thought: {800,200} This feels... familiar. Like I've seen this before.
-Whisper: whisper: {300,800} The ancient power stirs...`;
+* Closing Scene: After the rocket fell, there was destruction nearby. The rocket was completely destroyed. Although the pilot survived, his life was in danger. Everything near the rocket was burning`;
 
 const scriptTextAtom = atom<string>(DEFAULT_V2_SCRIPT);
 
 export default scriptTextAtom;
+

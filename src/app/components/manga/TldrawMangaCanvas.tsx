@@ -33,8 +33,8 @@ import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
 import { Card } from "../ui/card";
 
 // Define canvas constants
-const CANVAS_WIDTH = 2048; // You can adjust this based on your needs
-const CANVAS_HEIGHT = 2048; // You can adjust this based on your needs
+const CANVAS_WIDTH = 935; // You can adjust this based on your needs
+const CANVAS_HEIGHT = 1305; // You can adjust this based on your needs
 const CANVAS_PADDING = 100; // Padding for camera constraints
 // Camera options with fixed bounds
 const MANGA_CAMERA_OPTIONS: TLCameraOptions = {
@@ -237,8 +237,14 @@ export function TldrawMangaCanvas() {
             return {
               ...dialogue,
               position: {
-                x: Math.max(0, Math.min(1024, Math.round(dialogueShape.x))),
-                y: Math.max(0, Math.min(1024, Math.round(dialogueShape.y))),
+                x: Math.max(
+                  0,
+                  Math.min(CANVAS_WIDTH, Math.round(dialogueShape.x)),
+                ),
+                y: Math.max(
+                  0,
+                  Math.min(CANVAS_HEIGHT, Math.round(dialogueShape.y)),
+                ),
               },
               // Update text content if it changed, with fallbacks
               dialogue: dialogueShape.props?.text || dialogue.dialogue || "",
@@ -467,7 +473,7 @@ export function TldrawMangaCanvas() {
       style={{ minHeight: "600px" }}
     >
       <Tldraw
-        store={store}
+        // store={store}
         onMount={handleMount}
         shapeUtils={customShapeUtils}
         tools={customTools}
