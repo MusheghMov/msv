@@ -10,8 +10,8 @@ const DialogueTypeSchema = z.enum([
 ]);
 
 const PositionSchema = z.object({
-  x: z.number().int().min(0).max(2000),
-  y: z.number().int().min(0).max(1200),
+  x: z.number().int().min(0).max(1024),
+  y: z.number().int().min(0).max(1024),
 });
 
 const DialogueSchema = z.object({
@@ -281,7 +281,7 @@ function parseDialogueLine(line: string, state: ParserState): boolean {
         addError(
           state,
           line,
-          `Invalid position coordinates: ${positionStr}. Position must be {x,y} where x is 0-2000 and y is 0-1200.`,
+          `Invalid position coordinates: ${positionStr}. Position must be {x,y} where x is 0-1024 and y is 0-1024.`,
           "warning",
         );
         text = remainder;

@@ -187,6 +187,25 @@ export class DialogueBubbleShapeUtil extends ShapeUtil<DialogueBubbleShape> {
             fontWeight: "bold",
             textTransform: "uppercase" as const,
           };
+        case "whisper":
+          return {
+            ...baseStyle,
+            borderRadius: "20px",
+            borderStyle: "dotted",
+            fontSize: "12px",
+            fontStyle: "italic",
+            opacity: 0.8,
+          };
+        case "narrator":
+          return {
+            ...baseStyle,
+            borderRadius: "0px",
+            backgroundColor: "#f0f0f0",
+            borderColor: "#666666",
+            fontSize: "13px",
+            fontFamily: "Arial, sans-serif",
+            fontStyle: "italic",
+          };
         default:
           return baseStyle;
       }

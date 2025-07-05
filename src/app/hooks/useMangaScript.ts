@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useEffect } from "react";
+import { useCallback, useMemo, useEffect, useState } from "react";
 import type { DialogueData, ScriptParseResult } from "@/app/types/manga";
-import { parseScript } from "@/app/utils/scriptParser";
+import { parseMangaScriptV2, type ParsedMangaScript } from "@/app/utils/mangaScriptV2Parser";
+import { flattenV2ToDialogueData, v2ScriptToText, reconstructV2FromDialogueData } from "@/app/utils/mangaScriptV2Adapters";
 import dialoguesAtom from "../atoms/dialoguesAtom";
 import scriptTextAtom from "../atoms/scriptTextAtom";
 import syncSourceAtom from "../atoms/syncSourceAtom";
@@ -13,10 +14,12 @@ interface UseMangaScriptReturn {
   errors: string[];
   isValid: boolean;
   parseResult: ScriptParseResult;
+  v2ParsedScript: ParsedMangaScript | null;
 }
 
 /**
  * Custom hook for managing manga script parsing and validation with bidirectional sync
+ * Now uses V2 hierarchical parser with flat conversion for canvas compatibility
  */
 export function useMangaScript(
   initialScript: string = "",
@@ -24,10 +27,24 @@ export function useMangaScript(
   const setDialogues = useSetAtom(dialoguesAtom);
   const [scriptText, setScriptText] = useAtom(scriptTextAtom);
   const [syncSource, setSyncSource] = useAtom(syncSourceAtom);
+  const [v2ParsedScript, setV2ParsedScript] = useState<ParsedMangaScript | null>(null);
 
+  // Parse V2 script and convert to flat format
   const parseResult = useMemo(() => {
-    const res = parseScript(scriptText);
-    return res;
+    const v2Result = parseMangaScriptV2(scriptText);
+    setV2ParsedScript(v2Result);
+    
+    // Convert to flat dialogues for canvas compatibility
+    const flatDialogues = flattenV2ToDialogueData(v2Result);
+    
+    // Convert to V1-compatible parse result
+    const v1Result: ScriptParseResult = {
+      dialogues: flatDialogues,
+      errors: v2Result.errors.map(error => `Line ${error.line}: ${error.error}`),
+      isValid: v2Result.errors.filter(e => e.severity === 'error').length === 0
+    };
+    
+    return v1Result;
   }, [scriptText]);
 
   // Update dialogues when script changes and sync source is not 'bubbles'
@@ -54,6 +71,7 @@ export function useMangaScript(
     errors: parseResult.errors,
     isValid: parseResult.isValid,
     parseResult,
+    v2ParsedScript,
   };
 }
 

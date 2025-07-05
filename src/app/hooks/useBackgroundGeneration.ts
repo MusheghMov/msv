@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { DialogueData } from "@/app/types/manga";
-import { generatePlacementInstructions } from "@/app/utils/scriptParser";
+// Note: Background generation functionality temporarily disabled for V2 migration
 
 interface UseBackgroundGenerationReturn {
   isGenerating: boolean;
@@ -48,7 +48,9 @@ export function useBackgroundGeneration(): UseBackgroundGenerationReturn {
 
       try {
         // Create placement instructions based on extracted data
-        const placementInstructions = generatePlacementInstructions(dialogues);
+        const placementInstructions = dialogues.map(d => 
+          `${d.character}: ${d.dialogue} (positioned at ${d.position.x},${d.position.y})`
+        ).join('\n');
 
         // Construct a detailed prompt for the AI
         const fullPrompt = `Generate a manga panel image in a black and white, high-contrast ink style.
