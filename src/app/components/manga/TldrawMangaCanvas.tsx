@@ -29,6 +29,7 @@ import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import dialoguesAtom, { useDialoguesListener } from "@/app/atoms/dialoguesAtom";
 import { DialogueData } from "@/app/types/manga";
 import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
+import { Card } from "../ui/card";
 
 // Define canvas constants
 const CANVAS_WIDTH = 1024;
@@ -456,7 +457,10 @@ export function TldrawMangaCanvas() {
   );
 
   return (
-    <div className="relative w-full h-full" style={{ minHeight: "600px" }}>
+    <Card
+      className="p-0 overflow-hidden relative w-full h-full"
+      style={{ minHeight: "600px" }}
+    >
       <Tldraw
         onMount={handleMount}
         shapeUtils={customShapeUtils}
@@ -467,6 +471,6 @@ export function TldrawMangaCanvas() {
         cameraOptions={MANGA_CAMERA_OPTIONS}
         autoFocus={false}
       />
-    </div>
+    </Card>
   );
 }
