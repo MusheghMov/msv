@@ -2,7 +2,7 @@
 
 import { Textarea } from "@/app/components/ui/textarea";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { AlertCircle, CircleQuestionMarkIcon } from "lucide-react";
+import { AlertCircle, InfoIcon } from "lucide-react";
 import { useMangaScript } from "@/app/hooks/useMangaScript";
 import ScriptStatusBadge from "./ScriptStatusBadge";
 import ScriptMetadata from "./ScriptMetadata";
@@ -11,9 +11,16 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/app/components/ui/hover-card";
+import { useScriptTextListener } from "@/app/atoms/scriptTextAtom";
+import { useState } from "react";
 
 export function ScriptEditor() {
   const { scriptText, setScriptText, errors, parsedScript } = useMangaScript();
+  const [scriptTextValue, setScriptTextValue] = useState(scriptText);
+
+  useScriptTextListener((_get, _set, newValue, _prevValue) => {
+    setScriptTextValue(newValue);
+  });
 
   return (
     <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
@@ -21,11 +28,11 @@ export function ScriptEditor() {
         <div className="flex items-center justify-between mb-2 gap-2">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-900">
-              Dialogue Script
+              Manga Script
             </h2>
             <HoverCard openDelay={0}>
               <HoverCardTrigger>
-                <CircleQuestionMarkIcon className="h-4 w-4" />
+                <InfoIcon className="h-4 w-4" />
               </HoverCardTrigger>
               <HoverCardContent className="w-96">
                 <div className="space-y-4">
@@ -120,7 +127,7 @@ export function ScriptEditor() {
 
       <div className="flex-1 p-4">
         <Textarea
-          value={scriptText}
+          value={scriptTextValue}
           onChange={(e) => {
             setScriptText(e.target.value);
           }}

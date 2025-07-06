@@ -112,22 +112,22 @@ export class DialogueBubbleShapeUtil extends ShapeUtil<DialogueBubbleShape> {
   // Handle resize - proper implementation for all resize handles with both width and height
   override onResize(shape: DialogueBubbleShape, info: any) {
     const { scaleX, scaleY, handle } = info;
-    
+
     // Calculate new dimensions based on both scales
     const newWidth = Math.max(100, shape.props.w * scaleX);
     const newHeight = Math.max(50, shape.props.h * scaleY);
-    
+
     // Handle position updates for different resize handles
     let newX = shape.x;
     let newY = shape.y;
-    
+
     // For left-side resizes, adjust X position to keep right edge fixed
-    if (handle && (handle.includes('left') || handle.includes('w'))) {
+    if (handle && (handle.includes("left") || handle.includes("w"))) {
       newX = shape.x + shape.props.w - newWidth;
     }
-    
+
     // For top-side resizes, adjust Y position to keep bottom edge fixed
-    if (handle && (handle.includes('top') || handle.includes('n'))) {
+    if (handle && (handle.includes("top") || handle.includes("n"))) {
       newY = shape.y + shape.props.h - newHeight;
     }
 

@@ -51,7 +51,6 @@ export class DialogueBubbleTool extends StateNode {
 
     // Create the dialogue bubble shape with default properties
     this.editor.createShape({
-      id: shapeId as any,
       type: "dialogue-bubble" as const,
       x: constrainedPos.x,
       y: constrainedPos.y,
@@ -62,6 +61,7 @@ export class DialogueBubbleTool extends StateNode {
         character: "Character",
         dialogueType: "speech",
       },
+      meta: { id: shapeId },
     });
 
     // Select the newly created shape
