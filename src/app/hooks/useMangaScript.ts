@@ -4,7 +4,11 @@ import {
   parseMangaScriptV2,
   type ParsedMangaScript,
 } from "@/app/utils/mangaScriptV2Parser";
-import { flattenV2ToDialogueData } from "@/app/utils/mangaScriptV2Adapters";
+import {
+  flattenV2ToDialogueData,
+  reconstructV2FromDialogueData,
+  v2ScriptToText,
+} from "@/app/utils/mangaScriptV2Adapters";
 import scriptTextAtom from "../atoms/scriptTextAtom";
 import { useAtom } from "jotai";
 
@@ -16,6 +20,7 @@ interface UseMangaScriptReturn {
   isValid: boolean;
   parseResult: ScriptParseResult;
   parsedScript: ParsedMangaScript | null;
+  updateScriptAfterPositionChange: (updatedDialogues: DialogueData[]) => void;
 }
 
 export function useMangaScript(): UseMangaScriptReturn {
@@ -38,9 +43,29 @@ export function useMangaScript(): UseMangaScriptReturn {
     };
   }, [scriptText]);
 
+  const updateScriptAfterPositionChange = (
+    updatedDialogues: DialogueData[],
+  ) => {
+    const parsedScript = parseMangaScriptV2(scriptText);
+    setParsedScript(parsedScript);
+    if (!parsedScript) {
+      return;
+    }
+    // Reconstruct script with updated dialogue data
+    const updatedParsedScript = reconstructV2FromDialogueData(
+      updatedDialogues,
+      parsedScript,
+    );
+
+    const newScriptText = v2ScriptToText(updatedParsedScript);
+
+    setScriptText(newScriptText);
+  };
+
   return {
     scriptText,
     setScriptText,
+    updateScriptAfterPositionChange,
     dialogues: parseResult.dialogues,
     errors: parseResult.errors,
     isValid: parseResult.isValid,

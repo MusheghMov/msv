@@ -75,21 +75,29 @@ interface ParserState {
   chapters: Chapter[];
   errors: ParseError[];
   lineNumber: number;
+  chapterIndex: number;
+  sceneIndex: number;
+  dialogueIndex: number;
 }
 
 /**
- * Generates a UUID using crypto.randomUUID() with fallback
+ * Generates a deterministic UUID based on position string
  */
-function generateUUID(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
+function generateDeterministicUUID(position: string): string {
+  // Simple hash function to create deterministic UUID from position
+  let hash = 0;
+  for (let i = 0; i < position.length; i++) {
+    const char = position.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32-bit integer
   }
-  // Fallback UUID generation for environments without crypto.randomUUID
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+
+  // Convert hash to positive number and create UUID format
+  const positiveHash = Math.abs(hash);
+  const hex = positiveHash.toString(16).padStart(8, "0");
+
+  // Create UUID v4 format with deterministic values
+  return `${hex.slice(0, 8)}-${hex.slice(0, 4)}-4${hex.slice(1, 4)}-8${hex.slice(2, 5)}-${hex.slice(0, 4)}${hex.slice(4, 8)}0000`;
 }
 
 /**
@@ -132,14 +140,17 @@ function parseChapterLine(line: string, state: ParserState): boolean {
 
   // Create new chapter
   state.currentChapter = {
-    id: generateUUID(),
+    id: generateDeterministicUUID(`chapter-${state.chapterIndex}`),
     name: chapterName,
     scenes: [],
     lineNumber: state.lineNumber,
   };
 
-  // Reset current scene
+  // Reset current scene and indices
   state.currentScene = null;
+  state.chapterIndex++;
+  state.sceneIndex = 0;
+  state.dialogueIndex = 0;
 
   return true;
 }
@@ -180,11 +191,14 @@ function parseSceneLine(line: string, state: ParserState): boolean {
       "warning",
     );
     state.currentChapter = {
-      id: generateUUID(),
+      id: generateDeterministicUUID(`chapter-${state.chapterIndex}`),
       name: "Default Chapter",
       scenes: [],
       lineNumber: state.lineNumber,
     };
+    state.chapterIndex++;
+    state.sceneIndex = 0;
+    state.dialogueIndex = 0;
   }
 
   // Save current scene if exists
@@ -194,13 +208,18 @@ function parseSceneLine(line: string, state: ParserState): boolean {
 
   // Create new scene
   state.currentScene = {
-    id: generateUUID(),
+    id: generateDeterministicUUID(
+      `scene-${state.chapterIndex - 1}-${state.sceneIndex}`,
+    ),
     name: sceneName,
     description: sceneDescription,
     dialogues: [],
     chapterId: state.currentChapter.id,
     lineNumber: state.lineNumber,
   };
+
+  state.sceneIndex++;
+  state.dialogueIndex = 0;
 
   return true;
 }
@@ -306,11 +325,14 @@ function parseDialogueLine(line: string, state: ParserState): boolean {
       "warning",
     );
     state.currentChapter = {
-      id: generateUUID(),
+      id: generateDeterministicUUID(`chapter-${state.chapterIndex}`),
       name: "Default Chapter",
       scenes: [],
       lineNumber: state.lineNumber,
     };
+    state.chapterIndex++;
+    state.sceneIndex = 0;
+    state.dialogueIndex = 0;
   }
 
   if (!state.currentScene) {
@@ -321,18 +343,24 @@ function parseDialogueLine(line: string, state: ParserState): boolean {
       "warning",
     );
     state.currentScene = {
-      id: generateUUID(),
+      id: generateDeterministicUUID(
+        `scene-${state.chapterIndex - 1}-${state.sceneIndex}`,
+      ),
       name: "Default Scene",
       description: "Auto-generated scene for orphaned dialogue",
       dialogues: [],
       chapterId: state.currentChapter.id,
       lineNumber: state.lineNumber,
     };
+    state.sceneIndex++;
+    state.dialogueIndex = 0;
   }
 
   // Create dialogue
   const dialogue: Dialogue = {
-    id: generateUUID(),
+    id: generateDeterministicUUID(
+      `dialogue-${state.chapterIndex - 1}-${state.sceneIndex - 1}-${state.dialogueIndex}`,
+    ),
     character,
     type: dialogueType,
     text,
@@ -343,6 +371,7 @@ function parseDialogueLine(line: string, state: ParserState): boolean {
   };
 
   state.currentScene.dialogues.push(dialogue);
+  state.dialogueIndex++;
 
   return true;
 }
@@ -445,6 +474,9 @@ export function parseMangaScriptV2(scriptText: string): ParsedMangaScript {
     chapters: [],
     errors: [],
     lineNumber: 0,
+    chapterIndex: 0,
+    sceneIndex: 0,
+    dialogueIndex: 0,
   };
 
   try {
@@ -535,4 +567,3 @@ export function findChapterById(
 ): Chapter | null {
   return parsedScript.chapters.find((chapter) => chapter.id === id) || null;
 }
-

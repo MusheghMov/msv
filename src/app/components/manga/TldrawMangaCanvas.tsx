@@ -196,7 +196,8 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
 };
 
 export function TldrawMangaCanvas() {
-  const { dialogues, scriptText, setScriptText } = useMangaScript();
+  const { dialogues, scriptText, updateScriptAfterPositionChange } =
+    useMangaScript();
 
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -255,19 +256,7 @@ export function TldrawMangaCanvas() {
 
         // Regenerate script text from updated dialogues
         try {
-          // Parse current script to maintain structure
-          const currentParsedScript = parseMangaScriptV2(scriptText);
-
-          // Reconstruct script with updated dialogue data
-          const updatedParsedScript = reconstructV2FromDialogueData(
-            updatedDialogues,
-            currentParsedScript,
-          );
-
-          // Convert back to script text
-          const newScriptText = v2ScriptToText(updatedParsedScript);
-
-          setScriptText(newScriptText);
+          updateScriptAfterPositionChange(updatedDialogues);
         } catch (scriptError) {
           console.error("Error regenerating script text:", scriptError);
         }
@@ -299,8 +288,6 @@ export function TldrawMangaCanvas() {
             console.warn("Shape with invalid ID format:", shape.id);
           }
         });
-        console.log("existingShapeMap: ", existingShapeMap);
-        console.log("dialogues: ", dialogues);
 
         // Update existing shapes and create new ones based on UUIDs
         dialogues.forEach((dialogue) => {
@@ -311,9 +298,7 @@ export function TldrawMangaCanvas() {
           }
 
           const dialogueUUID = dialogue.id;
-          console.log("dialogueUUID: ", dialogueUUID);
           const existingShape = existingShapeMap.get(dialogueUUID);
-          console.log("existingShape: ", existingShape);
 
           const shapeProps = {
             w: 200,
@@ -342,7 +327,7 @@ export function TldrawMangaCanvas() {
               bubbleShape.props.dialogueType !== shapeProps.dialogueType;
 
             if (propertiesChanged) {
-              console.log("propertiesChanged: ", propertiesChanged);
+              // console.log("propertiesChanged: ", propertiesChanged);
               try {
                 editor.updateShape({
                   id: existingShape.id,
@@ -358,7 +343,7 @@ export function TldrawMangaCanvas() {
                 );
               }
             } else if (positionChanged || propertiesChanged) {
-              console.log("positionChanged: ", positionChanged);
+              // console.log("positionChanged: ", positionChanged);
               // Update both position and properties for non-recently modified shapes
               try {
                 editor.updateShape({
@@ -376,7 +361,7 @@ export function TldrawMangaCanvas() {
             // Mark as processed
             existingShapeMap.delete(dialogue.id);
           } else {
-            console.log("creating new shape");
+            // console.log("creating new shape");
             // Create new shape with UUID-based ID
             try {
               editor.createShape({
@@ -446,7 +431,7 @@ export function TldrawMangaCanvas() {
       if (!shape) return;
 
       const dialogueUUID = shape.meta.id as string;
-      console.log("dialogueUUID: ", dialogueUUID);
+      // console.log("dialogueUUID: ", dialogueUUID);
 
       // Cast shapes to DialogueBubbleShape for type safety
       const bubbleShape = shape as DialogueBubbleShape;

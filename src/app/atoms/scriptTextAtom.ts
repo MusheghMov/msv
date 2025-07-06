@@ -14,6 +14,7 @@ Pilot #1: shout: {190,930} Please... Please... Help me...
 
 * Closing Scene: After the rocket fell, there was destruction nearby. The rocket was completely destroyed. Although the pilot survived, his life was in danger. Everything near the rocket was burning`;
 
-const [scriptTextAtom, useScriptTextListener] = atomWithListeners<string>("");
+const [scriptTextAtom, useScriptTextListener] =
+  atomWithListeners<string>(DEFAULT_V2_SCRIPT);
 export default scriptTextAtom;
 export { useScriptTextListener };
