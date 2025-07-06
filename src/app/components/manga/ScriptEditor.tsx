@@ -11,16 +11,14 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/app/components/ui/hover-card";
-import { useScriptTextListener } from "@/app/atoms/scriptTextAtom";
+import scriptTextAtom from "@/app/atoms/scriptTextAtom";
 import { useState } from "react";
+import { useSetAtom } from "jotai";
 
 export function ScriptEditor() {
-  const { scriptText, setScriptText, errors, parsedScript } = useMangaScript();
+  const { scriptText, errors, parsedScript } = useMangaScript();
+  const setScriptText = useSetAtom(scriptTextAtom);
   const [scriptTextValue, setScriptTextValue] = useState(scriptText);
-
-  useScriptTextListener((_get, _set, newValue, _prevValue) => {
-    setScriptTextValue(newValue);
-  });
 
   return (
     <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
@@ -129,7 +127,10 @@ export function ScriptEditor() {
         <Textarea
           value={scriptTextValue}
           onChange={(e) => {
-            setScriptText(e.target.value);
+            setScriptTextValue(e.target.value);
+            setTimeout(() => {
+              setScriptText(e.target.value);
+            });
           }}
           placeholder="Enter your manga script here..."
           className="h-full min-h-[400px] font-mono text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

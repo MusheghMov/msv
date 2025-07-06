@@ -27,11 +27,6 @@ import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import { DialogueData } from "@/app/types/manga";
 import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
 import { Card } from "../ui/card";
-import {
-  reconstructV2FromDialogueData,
-  v2ScriptToText,
-} from "@/app/utils/mangaScriptV2Adapters";
-import { parseMangaScriptV2 } from "@/app/utils/mangaScriptV2Parser";
 import { useMangaScript } from "@/app/hooks/useMangaScript";
 
 // Define canvas constants
@@ -264,7 +259,7 @@ export function TldrawMangaCanvas() {
         console.error("Error handling shape change:", error);
       }
     },
-    [dialogues],
+    [dialogues, scriptText, updateScriptAfterPositionChange],
   );
 
   // Convert DialogueData to tldraw shapes with UUID-based efficient updates
@@ -327,7 +322,6 @@ export function TldrawMangaCanvas() {
               bubbleShape.props.dialogueType !== shapeProps.dialogueType;
 
             if (propertiesChanged) {
-              // console.log("propertiesChanged: ", propertiesChanged);
               try {
                 editor.updateShape({
                   id: existingShape.id,
@@ -343,7 +337,6 @@ export function TldrawMangaCanvas() {
                 );
               }
             } else if (positionChanged || propertiesChanged) {
-              // console.log("positionChanged: ", positionChanged);
               // Update both position and properties for non-recently modified shapes
               try {
                 editor.updateShape({
@@ -361,7 +354,6 @@ export function TldrawMangaCanvas() {
             // Mark as processed
             existingShapeMap.delete(dialogue.id);
           } else {
-            // console.log("creating new shape");
             // Create new shape with UUID-based ID
             try {
               editor.createShape({
@@ -431,7 +423,6 @@ export function TldrawMangaCanvas() {
       if (!shape) return;
 
       const dialogueUUID = shape.meta.id as string;
-      // console.log("dialogueUUID: ", dialogueUUID);
 
       // Cast shapes to DialogueBubbleShape for type safety
       const bubbleShape = shape as DialogueBubbleShape;

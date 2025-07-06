@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import type { DialogueData, ScriptParseResult } from "@/app/types/manga";
 import {
   parseMangaScriptV2,
@@ -25,10 +25,15 @@ interface UseMangaScriptReturn {
 
 export function useMangaScript(): UseMangaScriptReturn {
   const [scriptText, setScriptText] = useAtom(scriptTextAtom);
+  const scriptTextRef = useRef(scriptText);
 
   const [parsedScript, setParsedScript] = useState<ParsedMangaScript | null>(
     null,
   );
+
+  useEffect(() => {
+    scriptTextRef.current = scriptText;
+  }, [scriptText]);
 
   const parseResult = useMemo(() => {
     const res = parseMangaScriptV2(scriptText);
@@ -43,24 +48,26 @@ export function useMangaScript(): UseMangaScriptReturn {
     };
   }, [scriptText]);
 
-  const updateScriptAfterPositionChange = (
-    updatedDialogues: DialogueData[],
-  ) => {
-    const parsedScript = parseMangaScriptV2(scriptText);
-    setParsedScript(parsedScript);
-    if (!parsedScript) {
-      return;
-    }
-    // Reconstruct script with updated dialogue data
-    const updatedParsedScript = reconstructV2FromDialogueData(
-      updatedDialogues,
-      parsedScript,
-    );
+  const updateScriptAfterPositionChange = useCallback(
+    (updatedDialogues: DialogueData[]) => {
+      const currentScriptText = scriptTextRef.current;
+      const parsedScript = parseMangaScriptV2(currentScriptText);
+      setParsedScript(parsedScript);
+      if (!parsedScript) {
+        return;
+      }
+      // Reconstruct script with updated dialogue data
+      const updatedParsedScript = reconstructV2FromDialogueData(
+        updatedDialogues,
+        parsedScript,
+      );
 
-    const newScriptText = v2ScriptToText(updatedParsedScript);
+      const newScriptText = v2ScriptToText(updatedParsedScript);
 
-    setScriptText(newScriptText);
-  };
+      setScriptText(newScriptText);
+    },
+    [setParsedScript, setScriptText],
+  );
 
   return {
     scriptText,
