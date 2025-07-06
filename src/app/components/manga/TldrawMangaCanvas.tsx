@@ -24,9 +24,14 @@ import "tldraw/tldraw.css";
 import { DialogueBubbleShapeUtil } from "./DialogueBubbleShapeUtil";
 import { DialogueBubbleTool } from "./DialogueBubbleTool";
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
-import { DialogueData } from "@/app/types/manga";
+import {
+  DialogueData,
+  AIGenerationRequest,
+  AIGenerationResponse,
+} from "@/app/types/manga";
 import { DialogueBubbleShape } from "./DialogueBubbleShapeUtil";
 import { Card } from "../ui/card";
+import { Button } from "../ui/button";
 import { useMangaScript } from "@/app/hooks/useMangaScript";
 
 // Define canvas constants
@@ -136,9 +141,9 @@ const uiOverrides: TLUiOverrides = {
   },
 };
 
-// Custom Components
-const components: TLComponents = {
-  Toolbar: (props) => {
+// Base components that don't need state access
+const baseComponents = {
+  Toolbar: (props: any) => {
     const tools = useTools();
     const isDialogueBubbleSelected = useIsToolSelected(
       tools["dialogue-bubble-tool"],
@@ -153,31 +158,13 @@ const components: TLComponents = {
       </DefaultToolbar>
     );
   },
-  KeyboardShortcutsDialog: (props) => {
+  KeyboardShortcutsDialog: (props: any) => {
     const tools = useTools();
     return (
       <DefaultKeyboardShortcutsDialog {...props}>
         <DefaultKeyboardShortcutsDialogContent />
         <TldrawUiMenuItem {...tools["dialogue-bubble-tool"]} />
       </DefaultKeyboardShortcutsDialog>
-    );
-  },
-  // Visual canvas boundary indicator
-  OnTheCanvas: () => {
-    return (
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT,
-          border: "2px solid #e0e0e0",
-          borderRadius: "8px",
-          pointerEvents: "none",
-          backgroundColor: "white",
-        }}
-      />
     );
   },
 };
@@ -195,6 +182,61 @@ export function TldrawMangaCanvas() {
     useMangaScript();
 
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(
+    null,
+  );
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  // Function to generate background using AI
+  const generateBackground = useCallback(
+    async (userPrompt?: string) => {
+      if (!dialogues || dialogues.length === 0) {
+        setGenerationError("No dialogue data available for context");
+        return;
+      }
+
+      setIsGeneratingBackground(true);
+      setGenerationError(null);
+
+      try {
+        const requestData: AIGenerationRequest = {
+          userPrompt: userPrompt || "",
+          dialogueData: dialogues,
+          scriptText: scriptText || "",
+        };
+
+        const response = await fetch("/api/generate-background", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestData),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result: AIGenerationResponse = await response.json();
+
+        if (result.success && result.imageUrl) {
+          setBackgroundImageUrl(result.imageUrl);
+          setGenerationError(null);
+        } else {
+          throw new Error(result.error || "Failed to generate background");
+        }
+      } catch (error) {
+        console.error("Error generating background:", error);
+        setGenerationError(
+          error instanceof Error ? error.message : "Unknown error occurred",
+        );
+      } finally {
+        setIsGeneratingBackground(false);
+      }
+    },
+    [dialogues, scriptText],
+  );
 
   // Handle shape changes and sync back to dialogue data AND script text
   const handleShapeChange = useCallback(
@@ -393,6 +435,38 @@ export function TldrawMangaCanvas() {
   // Custom shape utilities - memoized to prevent re-renders
   const customShapeUtils = useMemo(() => [DialogueBubbleShapeUtil], []);
 
+  // Components with state access
+  const components: TLComponents = useMemo(
+    () => ({
+      ...baseComponents,
+      // Visual canvas boundary indicator with background support
+      OnTheCanvas: () => {
+        return (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              border: "2px solid #e0e0e0",
+              borderRadius: "8px",
+              pointerEvents: "none",
+              backgroundColor: "white",
+              backgroundImage: backgroundImageUrl
+                ? `url(${backgroundImageUrl})`
+                : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          />
+        );
+      },
+    }),
+    [backgroundImageUrl],
+  );
+
   // Merge default asset URLs with custom ones
   const defaultAssetUrls = getAssetUrls({
     baseUrl: "/",
@@ -443,6 +517,38 @@ export function TldrawMangaCanvas() {
       className="p-0 overflow-hidden relative w-full h-full"
       style={{ minHeight: "600px" }}
     >
+      {/* AI Background Generation Controls */}
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+        <Button
+          onClick={() => generateBackground()}
+          disabled={
+            isGeneratingBackground || !dialogues || dialogues.length === 0
+          }
+          className="shadow-lg"
+          variant="default"
+          size="sm"
+        >
+          {isGeneratingBackground ? "Generating..." : "🎨 Generate Background"}
+        </Button>
+
+        {backgroundImageUrl && (
+          <Button
+            onClick={() => setBackgroundImageUrl(null)}
+            variant="outline"
+            size="sm"
+            className="shadow-lg"
+          >
+            🗑️ Clear Background
+          </Button>
+        )}
+
+        {generationError && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-xs max-w-48">
+            {generationError}
+          </div>
+        )}
+      </div>
+
       <Tldraw
         // store={store}
         onMount={(editor) => {

@@ -4,6 +4,7 @@ import { Document } from "@/app/Document";
 import { MangaScriptVisualizer } from "@/app/pages/MangaScriptVisualizer";
 import { setCommonHeaders } from "@/app/headers";
 import { Session } from "./session/durableObject";
+import { generateBackgroundRoute } from "@/app/api/generate-background";
 export { SessionDurableObject } from "./session/durableObject";
 
 export type AppContext = {
@@ -12,5 +13,6 @@ export type AppContext = {
 
 export default defineApp([
   setCommonHeaders(),
+  generateBackgroundRoute,
   render(Document, [route("/", MangaScriptVisualizer)]),
 ]);

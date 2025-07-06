@@ -154,8 +154,6 @@ Sarah: thought: {200,300} Oh no, I completely forgot!
 ### Backend
 
 - **Cloudflare Workers** - Serverless compute platform
-- **Prisma ORM** - Database abstraction
-- **Cloudflare D1** - SQLite-compatible database
 - **Durable Objects** - Session management
 
 ## 💻 Development
@@ -291,4 +289,3 @@ If you encounter any issues or have questions:
 ---
 
 **Made with ❤️ for manga creators worldwide**
-
