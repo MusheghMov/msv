@@ -1,5 +1,6 @@
 "use client";
 
+// import { useSyncDemo } from "@tldraw/sync";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Tldraw,
@@ -427,11 +428,6 @@ export function TldrawMangaCanvas() {
     [editor],
   );
 
-  // const store = useSyncDemo({
-  //   roomId: "msv-deom-room-1212341241212415123541234",
-  //   shapeUtils: customShapeUtils,
-  // });
-
   // Custom shape utilities - memoized to prevent re-renders
   const customShapeUtils = useMemo(() => [DialogueBubbleShapeUtil], []);
 
@@ -511,6 +507,11 @@ export function TldrawMangaCanvas() {
       editor.removeListener("event", func);
     };
   }, [editor]);
+
+  // const store = useSyncDemo({
+  //   roomId: "msv-deom-room-1212341241212415123541234",
+  //   shapeUtils: customShapeUtils,
+  // });
 
   return (
     <Card

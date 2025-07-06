@@ -8,10 +8,9 @@
     "binding": "ASSETS",
   },
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
   },
   "observability": {
     "enabled": true,
   },
 }
-

@@ -11,14 +11,20 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/app/components/ui/hover-card";
-import scriptTextAtom from "@/app/atoms/scriptTextAtom";
+import scriptTextAtom, {
+  useScriptTextListener,
+} from "@/app/atoms/scriptTextAtom";
 import { useState } from "react";
-import { useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 
 export function ScriptEditor() {
-  const { scriptText, errors, parsedScript } = useMangaScript();
-  const setScriptText = useSetAtom(scriptTextAtom);
+  const { errors, parsedScript } = useMangaScript();
+  const [scriptText, setScriptText] = useAtom(scriptTextAtom);
   const [scriptTextValue, setScriptTextValue] = useState(scriptText);
+
+  useScriptTextListener((_get, _set, newVal, oldVal) => {
+    setScriptTextValue(newVal);
+  });
 
   return (
     <div className="bg-white rounded-lg shadow-lg h-full flex flex-col">
